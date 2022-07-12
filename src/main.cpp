@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <math.h>
+#include <numeric>
 
 #include <boost/type_index.hpp>
 #include <boost/lexical_cast.hpp>
@@ -130,6 +131,48 @@ namespace Utils {
         cblas_dscal(3, 1 / normA, &dirA[0], 1);
         cblas_dscal(3, 1 / normC, &dirC[0], 1);
         return acos(cblas_ddot(3, &dirA[0], 1, &dirC[0], 1)) * RAD2DEG;
+    }
+
+    template< typename order_iterator, typename value_iterator >
+    void reorder_non_destructive( order_iterator order_begin, order_iterator order_end, value_iterator v )  {   
+        typedef typename std::iterator_traits< value_iterator >::value_type value_t;
+        typedef typename std::iterator_traits< order_iterator >::value_type index_t;
+        typedef typename std::iterator_traits< order_iterator >::difference_type diff_t;
+        
+        diff_t remaining = order_end - 1 - order_begin;
+        for ( index_t s = index_t(), d; remaining > 0; ++ s ) {
+            for ( d = order_begin[s]; d > s; d = order_begin[d] ) ;
+            if ( d == s ) {
+                -- remaining;
+                value_t temp = v[s];
+                while ( d = order_begin[d], d != s ) {
+                    std::swap( temp, v[d] );
+                    -- remaining;
+                }
+                v[s] = temp;
+            }
+        }
+    }
+
+    template< typename order_iterator, typename value_iterator >
+    void reorder_destructive( order_iterator order_begin, order_iterator order_end, value_iterator v )  {
+        typedef typename std::iterator_traits< value_iterator >::value_type value_t;
+        typedef typename std::iterator_traits< order_iterator >::value_type index_t;
+        typedef typename std::iterator_traits< order_iterator >::difference_type diff_t;
+        
+        diff_t remaining = order_end - 1 - order_begin;
+        for ( index_t s = index_t(); remaining > 0; ++ s ) {
+            index_t d = order_begin[s];
+            if ( d == (diff_t) -1 ) continue;
+            -- remaining;
+            value_t temp = v[s];
+            for ( index_t d2; d != s; d = d2 ) {
+                std::swap( temp, v[d] );
+                std::swap( order_begin[d], d2 = (diff_t) -1 );
+                -- remaining;
+            }
+            v[s] = temp;
+        }
     }
 }
 
@@ -305,6 +348,21 @@ class Confpool {
             fmt::print("Deleted {} structures\n", del_count);
         }
 
+        void sort() {
+            if (ener_.size() != coord_.size())
+                throw std::runtime_error(fmt::format("Energy list size is {} but the structures list size is different ({})", ener_.size(), coord_.size()));
+
+            std::vector<int> indices(coord_.size());
+            std::iota(indices.begin(), indices.end(), 0);
+            std::sort(indices.begin(), indices.end(),
+                        [&](int A, int B) -> bool {
+                                return ener_[A] < ener_[B];
+                        });
+            Utils::reorder_non_destructive(indices.cbegin(), indices.cend(), ener_.begin());
+            Utils::reorder_non_destructive(indices.cbegin(), indices.cend(), descr_.begin());
+            Utils::reorder_destructive(indices.begin(), indices.end(), coord_.begin()); // I am speeeed____
+        }
+
         void remove_structure(const int& i) {
             auto e_it = ener_.begin();
             std::advance(e_it, i);
@@ -351,6 +409,7 @@ PYBIND11_MODULE(confpool, m) {
         .def("energy_filter", &Confpool::energy_filter)
         .def("distance_filter", &Confpool::distance_filter)
         .def("valence_filter", &Confpool::valence_filter)
+        .def("sort", &Confpool::sort)
         .def("save", &Confpool::save);
 
     // m.def("execute", &execf);
