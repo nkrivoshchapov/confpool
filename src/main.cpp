@@ -15,9 +15,12 @@
 #include "fmt/args.h"
 
 #include <gsl/gsl_cblas.h>
+#include <Eigen/Dense>
 
 using boost::typeindex::type_id_with_cvr;
 namespace py = pybind11;
+
+# define DOUBLE_THRESHOLD 0.9999999999
 
 namespace Utils {
     const double H2KC = 627.509474063;
@@ -114,7 +117,6 @@ namespace Utils {
         double res[3];
         cblas_dcopy(3, &a_xyz[0], 1, &res[0], 1);
         cblas_daxpy(3, -1.0, &b_xyz[0], 1, &res[0], 1);
-        // return sqrt(cblas_ddot(3, &res[0], 1, &res[0], 1));
         return cblas_dnrm2(3, &res[0], 1);
     }
 
@@ -131,6 +133,36 @@ namespace Utils {
         cblas_dscal(3, 1 / normA, &dirA[0], 1);
         cblas_dscal(3, 1 / normC, &dirC[0], 1);
         return acos(cblas_ddot(3, &dirA[0], 1, &dirC[0], 1)) * RAD2DEG;
+    }
+
+    double get_dihedral(const std::vector<double>& a_xyz, const std::vector<double>& b_xyz, const std::vector<double>& c_xyz, const std::vector<double>& d_xyz) {
+        using Eigen::Vector3d, Eigen::Matrix3d;
+        Eigen::Map<const Eigen::Vector3d> r_a(a_xyz.data());
+        Eigen::Map<const Eigen::Vector3d> r_b(b_xyz.data());
+        Eigen::Map<const Eigen::Vector3d> r_c(c_xyz.data());
+        Eigen::Map<const Eigen::Vector3d> r_d(d_xyz.data());
+
+        Vector3d fr1_side = r_a - r_b;
+        Vector3d fr1_mid = r_c - r_b;
+        Vector3d fr2_mid = -fr1_mid;
+        Vector3d fr2_side = r_d - r_c;
+        fr1_side -= (fr1_side.dot(fr1_mid) / fr1_mid.squaredNorm()) * fr1_mid;
+        fr2_side -= (fr2_side.dot(fr2_mid) / fr2_mid.squaredNorm()) * fr2_mid;
+        fr1_side.normalize();
+        fr2_side.normalize();
+
+        auto dotprod = fr1_side.dot(fr2_side);
+        if (dotprod >= 1.0)
+            dotprod = DOUBLE_THRESHOLD;
+        else if (dotprod <= -1.0)
+            dotprod = -DOUBLE_THRESHOLD;
+        auto ang = acos(dotprod);
+
+        Matrix3d mymatr;
+        mymatr << fr1_side, fr1_mid, fr2_side;
+        if (mymatr.determinant() < 0)
+            ang = -ang;
+        return ang * RAD2DEG;
     }
 
     template< typename order_iterator, typename value_iterator >
@@ -348,6 +380,28 @@ class Confpool {
             fmt::print("Deleted {} structures\n", del_count);
         }
 
+        void dihedral_filter(const py::int_& py_a_idx, const py::int_& py_b_idx, const py::int_& py_c_idx, const py::int_& py_d_idx, const py::function& dihedral_condition) {
+            const int a_idx = py_a_idx.cast<int>() - 1;
+            const int b_idx = py_b_idx.cast<int>() - 1;
+            const int c_idx = py_c_idx.cast<int>() - 1;
+            const int d_idx = py_d_idx.cast<int>() - 1;
+
+            unsigned int del_count = 0;
+            for(int i = coord_.size() - 1; i >= 0; --i) {
+                const auto& a_xyz = coord_[i].get_atom(a_idx);
+                const auto& b_xyz = coord_[i].get_atom(b_idx);
+                const auto& c_xyz = coord_[i].get_atom(c_idx);
+                const auto& d_xyz = coord_[i].get_atom(d_idx);
+                auto py_dist = py::cast(Utils::get_dihedral(a_xyz, b_xyz, c_xyz, d_xyz));
+                descr_[i] = fmt::format("Dihedral = {}", Utils::get_dihedral(a_xyz, b_xyz, c_xyz, d_xyz));
+                if (!(dihedral_condition(py_dist).cast<bool>())) {
+                    remove_structure(i);
+                    del_count += 1;
+                }
+            }
+            fmt::print("Deleted {} structures\n", del_count);
+        }
+
         void sort() {
             if (ener_.size() != coord_.size())
                 throw std::runtime_error(fmt::format("Energy list size is {} but the structures list size is different ({})", ener_.size(), coord_.size()));
@@ -409,9 +463,7 @@ PYBIND11_MODULE(confpool, m) {
         .def("energy_filter", &Confpool::energy_filter)
         .def("distance_filter", &Confpool::distance_filter)
         .def("valence_filter", &Confpool::valence_filter)
+        .def("dihedral_filter", &Confpool::dihedral_filter)
         .def("sort", &Confpool::sort)
         .def("save", &Confpool::save);
-
-    // m.def("execute", &execf);
-    // m.def("subtract", [](int i, int j) { return i - j; });
 }
