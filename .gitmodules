@@ -6,3 +6,6 @@
 	path = fmt
 	url = https://github.com/fmtlib/fmt.git
 	branch = master
+[submodule "eigen"]
+	path = eigen
+	url = https://gitlab.com/libeigen/eigen.git
