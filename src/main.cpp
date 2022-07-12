@@ -393,7 +393,7 @@ class Confpool {
                 const auto& c_xyz = coord_[i].get_atom(c_idx);
                 const auto& d_xyz = coord_[i].get_atom(d_idx);
                 auto py_dist = py::cast(Utils::get_dihedral(a_xyz, b_xyz, c_xyz, d_xyz));
-                descr_[i] = fmt::format("Dihedral = {}", Utils::get_dihedral(a_xyz, b_xyz, c_xyz, d_xyz));
+                // descr_[i] = fmt::format("Dihedral = {}", Utils::get_dihedral(a_xyz, b_xyz, c_xyz, d_xyz));
                 if (!(dihedral_condition(py_dist).cast<bool>())) {
                     remove_structure(i);
                     del_count += 1;

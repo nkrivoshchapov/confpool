@@ -1,4 +1,4 @@
-import confpool as m # pymolxyz
+import myconfscript as m # pymolxyz
 
 # make Confpool < Geompool
 if __name__ == "__main__":
