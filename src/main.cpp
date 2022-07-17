@@ -5,6 +5,7 @@
 #include <vector>
 #include <math.h>
 #include <numeric>
+#include <fstream>
 
 #include <boost/type_index.hpp>
 #include <boost/lexical_cast.hpp>
