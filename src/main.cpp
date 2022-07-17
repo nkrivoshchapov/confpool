@@ -1,5 +1,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/numpy.h>
 
 #include <iostream>
 #include <vector>
@@ -137,7 +138,8 @@ namespace Utils {
     }
 
     double get_dihedral(const std::vector<double>& a_xyz, const std::vector<double>& b_xyz, const std::vector<double>& c_xyz, const std::vector<double>& d_xyz) {
-        using Eigen::Vector3d, Eigen::Matrix3d;
+        using Eigen::Vector3d;
+        using Eigen::Matrix3d;
         Eigen::Map<const Eigen::Vector3d> r_a(a_xyz.data());
         Eigen::Map<const Eigen::Vector3d> r_b(b_xyz.data());
         Eigen::Map<const Eigen::Vector3d> r_c(c_xyz.data());
@@ -225,9 +227,9 @@ class Confpool {
     public:
         Confpool() : natoms(0) {}
 
-        void include(py::str& py_filename, const py::kwargs& kwargs) {
+        void include_from_file(py::str& py_filename, const py::kwargs& kwargs) {
             const auto filename = py_filename.cast<std::string>();
-            std::cout << "The type of filename = "<< type_id_with_cvr<decltype(filename)>().pretty_name() << "\n";
+            // std::cout << "The type of filename = "<< type_id_with_cvr<decltype(filename)>().pretty_name() << "\n";
 
             py::object energy_f = py::none();
             if (kwargs.attr("__contains__")("energy").cast<bool>())
@@ -254,6 +256,7 @@ class Confpool {
             double energy = 0.0;
             while (cline < mylines.size()) {
                 // std::cout << "Casting to int '" << mylines[cline] << "'" << "\n";
+                boost::algorithm::trim(mylines[cline]);
                 const unsigned int cur_natoms = boost::lexical_cast<int>(mylines[cline].c_str());
                 if (natoms == 0) 
                     natoms = cur_natoms;
@@ -403,6 +406,90 @@ class Confpool {
             fmt::print("Deleted {} structures\n", del_count);
         }
 
+        py::int_ energy_count(const py::float_& py_maxener, const py::kwargs& kwargs) {
+            if (ener_.size() != coord_.size())
+                throw std::runtime_error(fmt::format("Energy list size is {} but the structures list size is different ({})", ener_.size(), coord_.size()));
+
+            const auto maxener = py_maxener.cast<double>();
+
+            std::string etype = "kcal/mol";
+            py::object energy_f = py::none();
+            if (kwargs.attr("__contains__")("etype").cast<bool>())
+                etype = kwargs["etype"].cast<std::string>();
+            
+            double mult;
+            if (etype == "kcal/mol")
+                mult = Utils::H2KC;
+            else if ((etype == "a.u.") || (etype == "hartree"))
+                mult = 1.0;
+            else
+                throw std::runtime_error("Unknown energy type - " + etype);
+            
+            double minener = ener_[0];
+            for (const auto& myener : ener_)
+                if (myener < minener)
+                    minener = minener;
+
+            unsigned int count = 0;
+            for(int i = coord_.size() - 1; i >= 0; --i) {
+                if ((ener_[i] - minener) * mult > maxener)
+                    count += 1;
+            }
+            return py::cast(count);
+        }
+
+
+        py::int_ distance_count(const py::int_& py_a_idx, const py::int_& py_b_idx, const py::function& dist_condition) {
+            const int a_idx = py_a_idx.cast<int>() - 1;
+            const int b_idx = py_b_idx.cast<int>() - 1;
+
+            unsigned int count = 0;
+            for(int i = coord_.size() - 1; i >= 0; --i) {
+                const auto& a_xyz = coord_[i].get_atom(a_idx);
+                const auto& b_xyz = coord_[i].get_atom(b_idx);
+                auto py_dist = py::cast(Utils::get_distance(a_xyz, b_xyz));
+                if (!(dist_condition(py_dist).cast<bool>()))
+                    count += 1;
+            }
+            return py::cast(count);
+        }
+
+        py::int_ valence_count(const py::int_& py_a_idx, const py::int_& py_b_idx, const py::int_& py_c_idx, const py::function& vangle_condition) {
+            const int a_idx = py_a_idx.cast<int>() - 1;
+            const int b_idx = py_b_idx.cast<int>() - 1;
+            const int c_idx = py_c_idx.cast<int>() - 1;
+
+            unsigned int count = 0;
+            for(int i = coord_.size() - 1; i >= 0; --i) {
+                const auto& a_xyz = coord_[i].get_atom(a_idx);
+                const auto& b_xyz = coord_[i].get_atom(b_idx);
+                const auto& c_xyz = coord_[i].get_atom(c_idx);
+                auto py_dist = py::cast(Utils::get_vangle(a_xyz, b_xyz, c_xyz));
+                if (!(vangle_condition(py_dist).cast<bool>()))
+                    count += 1;
+            }
+            return py::cast(count);
+        }
+
+        py::int_ dihedral_count(const py::int_& py_a_idx, const py::int_& py_b_idx, const py::int_& py_c_idx, const py::int_& py_d_idx, const py::function& dihedral_condition) {
+            const int a_idx = py_a_idx.cast<int>() - 1;
+            const int b_idx = py_b_idx.cast<int>() - 1;
+            const int c_idx = py_c_idx.cast<int>() - 1;
+            const int d_idx = py_d_idx.cast<int>() - 1;
+
+            unsigned int count = 0;
+            for(int i = coord_.size() - 1; i >= 0; --i) {
+                const auto& a_xyz = coord_[i].get_atom(a_idx);
+                const auto& b_xyz = coord_[i].get_atom(b_idx);
+                const auto& c_xyz = coord_[i].get_atom(c_idx);
+                const auto& d_xyz = coord_[i].get_atom(d_idx);
+                auto py_dist = py::cast(Utils::get_dihedral(a_xyz, b_xyz, c_xyz, d_xyz));
+                if (!(dihedral_condition(py_dist).cast<bool>()))
+                    count += 1;
+            }
+            return py::cast(count);
+        }
+
         void sort() {
             if (ener_.size() != coord_.size())
                 throw std::runtime_error(fmt::format("Energy list size is {} but the structures list size is different ({})", ener_.size(), coord_.size()));
@@ -419,9 +506,11 @@ class Confpool {
         }
 
         void remove_structure(const int& i) {
-            auto e_it = ener_.begin();
-            std::advance(e_it, i);
-            ener_.erase(e_it);
+            if (ener_.size() > 0) {
+                auto e_it = ener_.begin();
+                std::advance(e_it, i);
+                ener_.erase(e_it);
+            }
 
             auto c_it = coord_.begin();
             std::advance(c_it, i);
@@ -432,7 +521,7 @@ class Confpool {
             descr_.erase(d_it);
         }
 
-        void save(py::str& py_filename) {
+        void save(const py::str& py_filename) {
             const auto filename = py_filename.cast<std::string>();
 
             auto natoms_str = boost::lexical_cast<std::string>(natoms);
@@ -450,8 +539,53 @@ class Confpool {
 
             auto joined = boost::algorithm::join(reslines, "\n");
             std::ofstream out(filename);
-            out << joined << "\n";
+            out << joined << "\n\n\n";
             out.close();
+        }
+
+        py::int_ size() {
+            return py::cast(coord_.size());
+        }
+
+        py::dict get_structure(const py::int_& py_index) {
+            const auto index = py_index.cast<int>();
+            if (index < 0) {
+                throw std::runtime_error(fmt::format("Given index ({}) is less than zero", index));
+            }
+            else if (index >= coord_.size()) {
+                throw std::runtime_error(fmt::format("Given index ({}) is bigger than the maximum list element ({})", index, coord_.size()));
+            }
+
+            py::dict res;
+
+            if (index < ener_.size())
+                res["energy"] = py::cast(ener_[index]);
+            res["descr"] = py::cast(descr_[index]);
+
+            const size_t size = natoms * 3;
+            double *coord_array = new double[size];
+            for (size_t i = 0; i < natoms; i++) {
+                const auto& coords = coord_[index].get_atom(i);
+                coord_array[i * 3 + 0] = coords[0];
+                coord_array[i * 3 + 1] = coords[1];
+                coord_array[i * 3 + 2] = coords[2];
+            }
+
+            py::capsule free_when_done(coord_array, [](void *f) {
+                double *foo = reinterpret_cast<double *>(f);
+                delete[] foo;
+            });
+
+            res["xyz"] = py::array_t<double>(
+                {static_cast<int>(natoms), 3}, // shape
+                {3*8, 8}, // C-style contiguous strides for double
+                coord_array, // the data pointer
+                free_when_done);
+            return res;
+        }
+
+        py::list get_atom_symbols() {
+            return py::cast(sym_);
         }
 };
 
@@ -459,12 +593,19 @@ class Confpool {
 PYBIND11_MODULE(confpool, m) {
     py::class_<Confpool>(m, "Confpool")
         .def(py::init<>())
-        .def("include", &Confpool::include)
+        .def("include_from_file", &Confpool::include_from_file)
         .def("update_description", &Confpool::update_description)
         .def("energy_filter", &Confpool::energy_filter)
         .def("distance_filter", &Confpool::distance_filter)
         .def("valence_filter", &Confpool::valence_filter)
         .def("dihedral_filter", &Confpool::dihedral_filter)
+        .def("energy_count", &Confpool::energy_count)
+        .def("distance_count", &Confpool::distance_count)
+        .def("valence_count", &Confpool::valence_count)
+        .def("dihedral_count", &Confpool::dihedral_count)
+        .def("get_structure", &Confpool::get_structure)
+        .def("get_atom_symbols", &Confpool::get_atom_symbols)
+        .def("size", &Confpool::size)
         .def("sort", &Confpool::sort)
         .def("save", &Confpool::save);
 }
