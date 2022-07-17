@@ -1,10 +1,10 @@
-import subprocess, os
 from setuptools import setup
 
 setup(
-    name='myconfscript',
-    version='0.0.1',
+    name='pyxyz',
+    version='0.3{ver}.1',
     author='Nikolai Krivoshchapov',
-    packages=['myconfscript'],
-    package_data={'myconfscript': ['__init__.py', 'confpool.cpython-38-x86_64-linux-gnu.so', 'libgslcblas.so.0']}
+    python_requires='==3.{ver}.*',
+    packages=['pyxyz'],
+    package_data={'pyxyz': ['__init__.py', 'confpool.so', 'libgslcblas.so.0', 'test/*']}
 )

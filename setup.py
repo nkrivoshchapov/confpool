@@ -121,13 +121,13 @@ class CMakeBuild(build_ext):
 # The information here can also be placed in setup.cfg - better separation of
 # logic and declaration, and simpler if you include description/version in a file.
 setup(
-    name="confpool",
+    name="pyxyz",
     version="0.0.1",
     author="knv",
     author_email="knvvv@yandex.ru",
     description="A test project using pybind11 and CMake",
     long_description="",
-    ext_modules=[CMakeExtension("confpool")],
+    ext_modules=[CMakeExtension("pyxyz")],
     cmdclass={"build_ext": CMakeBuild},
     zip_safe=False,
     # extras_require={"test": ["pytest>=6.0"]},
