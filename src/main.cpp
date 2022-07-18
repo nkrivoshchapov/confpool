@@ -252,7 +252,6 @@ class Confpool {
                 ener_function = energy_obj.cast<py::function>();
             
             auto mylines = Utils::readlines(filename);
-			// mylines.push_back("");
 			// for (int i = 0; i < mylines.size(); ++i)
 				// fmt::print("{} -- {}\n", i, mylines[i]);
             int cline = 0;
@@ -435,7 +434,7 @@ class Confpool {
 
             unsigned int count = 0;
             for(int i = coord_.size() - 1; i >= 0; --i) {
-                if ((ener_[i] - minener) * mult > maxener)
+                if ((ener_[i] - minener) * mult <= maxener)
                     count += 1;
             }
             return py::cast(count);
@@ -451,7 +450,7 @@ class Confpool {
                 const auto& a_xyz = coord_[i].get_atom(a_idx);
                 const auto& b_xyz = coord_[i].get_atom(b_idx);
                 auto py_dist = py::cast(Utils::get_distance(a_xyz, b_xyz));
-                if (!(dist_condition(py_dist).cast<bool>()))
+                if (dist_condition(py_dist).cast<bool>())
                     count += 1;
             }
             return py::cast(count);
@@ -468,7 +467,7 @@ class Confpool {
                 const auto& b_xyz = coord_[i].get_atom(b_idx);
                 const auto& c_xyz = coord_[i].get_atom(c_idx);
                 auto py_dist = py::cast(Utils::get_vangle(a_xyz, b_xyz, c_xyz));
-                if (!(vangle_condition(py_dist).cast<bool>()))
+                if (vangle_condition(py_dist).cast<bool>())
                     count += 1;
             }
             return py::cast(count);
@@ -487,7 +486,7 @@ class Confpool {
                 const auto& c_xyz = coord_[i].get_atom(c_idx);
                 const auto& d_xyz = coord_[i].get_atom(d_idx);
                 auto py_dist = py::cast(Utils::get_dihedral(a_xyz, b_xyz, c_xyz, d_xyz));
-                if (!(dihedral_condition(py_dist).cast<bool>()))
+                if (dihedral_condition(py_dist).cast<bool>())
                     count += 1;
             }
             return py::cast(count);
