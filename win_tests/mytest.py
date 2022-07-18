@@ -1,13 +1,15 @@
 import os
 print("Hi")
-os.add_dll_directory(os.getcwd())
-import confpool as m # pymolxyz
-# make Confpool < Geompool
+import pyxyz as m
+print("Hi!!!")
+import pyxyz.test
+pyxyz.test.run_tests()
+
 
 if __name__ == "__main__":
     x = m.Confpool()
     print("Hi")
-    x.include("aminoacid_ensemble.xyz", energy=lambda x: float(x.strip()))
+    x.include_from_file("aminoacid_ensemble.xyz", energy=lambda x: float(x.strip()))
     # x.energy_filter(1.0, etype='kcal/mol')
     # x.include("testcs.xyz")
     # x.update_description(lambda e, d: "Energy = " + repr(e))
