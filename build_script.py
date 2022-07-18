@@ -1,11 +1,8 @@
 import os, sys, shutil, subprocess, glob, ntpath
 
-# name_ver = sys.argv[1] # like 'py37'
-ver = int(sys.argv[1]) # '7' in this case
+ver = int(sys.argv[1])
 setup_lines = open("release_files/setup.py", 'r').readlines()
 for i in range(len(setup_lines)):
-    # if '{name_ver}' in setup_lines[i]:
-    #     setup_lines[i] = setup_lines[i].format(name_ver=name_ver)
     if '{ver}' in setup_lines[i]:
         setup_lines[i] = setup_lines[i].format(ver=ver)
 setup_text = ''.join(setup_lines)

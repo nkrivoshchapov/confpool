@@ -107,10 +107,10 @@ namespace Utils {
 
         while (std::getline(infile, str))
         {
-            if(str.size() > 0) {
-                erase_remove_if(str, InvalidChar());
-                reslines.push_back(str);
-            }
+            // if(str.size() > 0) {
+			erase_remove_if(str, InvalidChar());
+			reslines.push_back(str);
+            // }
         }
         return reslines;
     }
@@ -252,6 +252,9 @@ class Confpool {
                 ener_function = energy_obj.cast<py::function>();
             
             auto mylines = Utils::readlines(filename);
+			// mylines.push_back("");
+			// for (int i = 0; i < mylines.size(); ++i)
+				// fmt::print("{} -- {}\n", i, mylines[i]);
             int cline = 0;
             double energy = 0.0;
             while (cline < mylines.size()) {
@@ -273,7 +276,7 @@ class Confpool {
                 for (unsigned int i = 2; i < natoms + 2; ++i)
                 {
                     if (cline + i >= mylines.size())
-                        throw std::runtime_error("Unexpected number of atoms. Check " + filename);
+                        throw std::runtime_error(fmt::format("Unexpected number of atoms (expected {}, nlines={}). Check {}", natoms, mylines.size(), filename));
                     
                     std::vector<std::string> parts;
                     boost::algorithm::trim(mylines[cline + i]);
