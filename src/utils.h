@@ -157,12 +157,16 @@ namespace Utils {
 
     template <typename T>
     std::vector<std::size_t> sort_permutation(
-        const std::vector<T>& vec)
+        const std::vector<T>& vec, bool ascend)
     {
         std::vector<std::size_t> p(vec.size());
         std::iota(p.begin(), p.end(), 0);
-        std::sort(p.begin(), p.end(),
-            [&](std::size_t i, std::size_t j){ return vec[i] < vec[j]; });
+        if (ascend)
+            std::sort(p.begin(), p.end(),
+                [&](std::size_t i, std::size_t j){ return vec[i] < vec[j]; });
+        else
+            std::sort(p.begin(), p.end(),
+                [&](std::size_t i, std::size_t j){ return vec[i] > vec[j]; });
         return p;
     }
 

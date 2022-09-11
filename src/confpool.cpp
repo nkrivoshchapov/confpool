@@ -23,16 +23,17 @@
 namespace py = pybind11;
 
 
-void Confpool::include_from_file(const py::str& py_filename) {
+py::int_ Confpool::include_from_file(const py::str& py_filename) {
     const auto filename = py_filename.cast<std::string>();
-    include(filename);
+    return include(filename);
 }
 
-void Confpool::include(const std::string& filename) {
+int Confpool::include(const std::string& filename) {
     auto mylines = Utils::readlines(filename);
     // for (int i = 0; i < mylines.size(); ++i)
         // fmt::print("{} -- {}\n", i, mylines[i]);
     int cline = 0;
+    int added_count = 0;
     while (cline < mylines.size()) {
         // std::cout << "Casting to int '" << mylines[cline] << "'" << "\n";
         boost::algorithm::trim(mylines[cline]);
@@ -71,79 +72,13 @@ void Confpool::include(const std::string& filename) {
         coord_.push_back(geom);
         descr_.push_back(description);
         cline += 2 + natoms;
+        added_count++;
     }
     resize();
+    return added_count;
 }
 
-void Confpool::key_from_description(const py::str& py_keyname, const py::function& py_parser) {
-    full_check();
-
-    const auto keyname = py_keyname.cast<std::string>();
-    // if (keys_.find(key) == keys_.end()) SOME OPTIMIZATIONS ARE POSSIBLE
-    keys_[keyname] = std::vector<double>(coord_.size());
-    for(int i = 0; i < coord_.size(); ++i)
-        keys_[keyname][i] = py_parser(py::cast(descr_[i])).cast<double>();
-}
-
-void Confpool::distance_to_key(const py::str& py_keyname, const py::int_& py_idxA, const py::int_& py_idxB) {
-    full_check();
-
-    const auto keyname = py_keyname.cast<std::string>();
-    const auto a_idx = py_idxA.cast<int>() - 1;
-    const auto b_idx = py_idxB.cast<int>() - 1;
-    if (a_idx > natoms)
-        throw std::runtime_error(fmt::format("Atom index {} is out of range (n_atoms = {})", py_idxA.cast<int>(), natoms));
-    if (b_idx > natoms)
-        throw std::runtime_error(fmt::format("Atom index {} is out of range (n_atoms = {})", py_idxB.cast<int>(), natoms));
-
-    keys_[keyname] = std::vector<double>(coord_.size());
-    for(int i = 0; i < coord_.size(); ++i) {
-        keys_[keyname][i] = coord_[i].get_distance(a_idx, b_idx);
-    }
-}
-
-void Confpool::vangle_to_key(const py::str& py_keyname, const py::int_& py_idxA, const py::int_& py_idxB, const py::int_& py_idxC) {
-    full_check();
-
-    const auto keyname = py_keyname.cast<std::string>();
-    const auto a_idx = py_idxA.cast<int>() - 1;
-    const auto b_idx = py_idxB.cast<int>() - 1;
-    const auto c_idx = py_idxC.cast<int>() - 1;
-    if (a_idx > natoms)
-        throw std::runtime_error(fmt::format("Atom index {} is out of range (n_atoms = {})", py_idxA.cast<int>(), natoms));
-    if (b_idx > natoms)
-        throw std::runtime_error(fmt::format("Atom index {} is out of range (n_atoms = {})", py_idxB.cast<int>(), natoms));
-    if (c_idx > natoms)
-        throw std::runtime_error(fmt::format("Atom index {} is out of range (n_atoms = {})", py_idxC.cast<int>(), natoms));
-
-    keys_[keyname] = std::vector<double>(coord_.size());
-    for(int i = 0; i < coord_.size(); ++i)
-        keys_[keyname][i] = coord_[i].get_vangle(a_idx, b_idx, c_idx);
-}
-
-void Confpool::dihedral_to_key(const py::str& py_keyname, const py::int_& py_idxA, const py::int_& py_idxB, const py::int_& py_idxC, const py::int_& py_idxD) {
-    full_check();
-
-    const auto keyname = py_keyname.cast<std::string>();
-    const auto a_idx = py_idxA.cast<int>() - 1;
-    const auto b_idx = py_idxB.cast<int>() - 1;
-    const auto c_idx = py_idxC.cast<int>() - 1;
-    const auto d_idx = py_idxD.cast<int>() - 1;
-    if (a_idx > natoms)
-        throw std::runtime_error(fmt::format("Atom index {} is out of range (n_atoms = {})", py_idxA.cast<int>(), natoms));
-    if (b_idx > natoms)
-        throw std::runtime_error(fmt::format("Atom index {} is out of range (n_atoms = {})", py_idxB.cast<int>(), natoms));
-    if (c_idx > natoms)
-        throw std::runtime_error(fmt::format("Atom index {} is out of range (n_atoms = {})", py_idxC.cast<int>(), natoms));
-    if (d_idx > natoms)
-        throw std::runtime_error(fmt::format("Atom index {} is out of range (n_atoms = {})", py_idxD.cast<int>(), natoms));
-
-    keys_[keyname] = std::vector<double>(coord_.size());
-    for(int i = 0; i < coord_.size(); ++i)
-        keys_[keyname][i] = coord_[i].get_dihedral(a_idx, b_idx, c_idx, d_idx);
-}
-
-void Confpool::filter(const py::function& py_criterion) {
+py::int_ Confpool::filter(const py::function& py_criterion) {
     full_check();
 
     unsigned int del_count = 0;
@@ -153,8 +88,8 @@ void Confpool::filter(const py::function& py_criterion) {
             del_count += 1;
         }
     }
-    fmt::print("Deleted {} structures\n", del_count);
     resize();
+    return del_count;
 }
 
 py::int_ Confpool::count(const py::function& py_criterion) {
@@ -165,6 +100,10 @@ py::int_ Confpool::count(const py::function& py_criterion) {
         if (py_criterion(proxies_[i]).cast<bool>())
             res += 1;
     return res;
+}
+
+void Confpool::remove_key(const std::string& keyname) {
+    keys_.erase(keyname);
 }
 
 void Confpool::remove_structure(const int& i) {
@@ -201,18 +140,7 @@ void Confpool::resize() {
     }
 }
 
-void Confpool::delete_by_proxy(const MolProxy& mol) {
-    delete_by_idx(mol.get_index());
-}
-
-void Confpool::update_description(const py::function& descr_f) {
-    full_check();
-
-    for(auto i = 0; i < coord_.size(); ++i)
-        descr_[i] = descr_f(proxies_[i]).cast<std::string>();
-}
-
-void Confpool::upper_cutoff(const py::str& py_keyname, const py::float_& py_cutoff) {
+py::int_ Confpool::upper_cutoff(const py::str& py_keyname, const py::float_& py_cutoff) {
     full_check();
     const auto cutoff = py_cutoff.cast<double>();
     if (cutoff <= 0.0)
@@ -232,11 +160,11 @@ void Confpool::upper_cutoff(const py::str& py_keyname, const py::float_& py_cuto
             del_count += 1;
         }
     }
-    fmt::print("Deleted {} structures\n", del_count);
     resize();
+    return del_count;
 }
 
-void Confpool::lower_cutoff(const py::str& py_keyname, const py::float_& py_cutoff) {
+py::int_ Confpool::lower_cutoff(const py::str& py_keyname, const py::float_& py_cutoff) {
     full_check();
     const auto cutoff = py_cutoff.cast<double>();
     if (cutoff <= 0.0)
@@ -256,11 +184,11 @@ void Confpool::lower_cutoff(const py::str& py_keyname, const py::float_& py_cuto
             del_count += 1;
         }
     }
-    fmt::print("Deleted {} structures\n", del_count);
     resize();
+    return del_count;
 }
 
-void Confpool::save(const py::str& py_filename) {
+void Confpool::save(const py::str& py_filename) const {
     full_check();
     const auto filename = py_filename.cast<std::string>();
 
@@ -271,7 +199,7 @@ void Confpool::save(const py::str& py_filename) {
         reslines.push_back(descr_[i]);
 
         for(auto j = 0; j < natoms; ++j) {
-            const auto& coords = coord_[i].get_atom(j);
+            const auto* coords = coord_[i].get_atom_raw(j);
             reslines.push_back(fmt::format("{:>2}  {:12.8f}  {:12.8f}  {:12.8f}", sym_[j], coords[0], coords[1], coords[2]));
         }
     }
@@ -282,13 +210,21 @@ void Confpool::save(const py::str& py_filename) {
     out.close();
 }
 
+py::dict Confpool::as_table() const {
+    py::dict res;
+    for(const auto& pair : keys_) { // pair = key, std::vector<double>
+        res[py::cast(pair.first)] = py::list(py::cast(pair.second));
+    }
+    return res;
+}
+
 void Confpool::full_check() const {
     if (coord_.size() != descr_.size())
         throw std::runtime_error(fmt::format("Mismatch of container sizes (coord and descr): {} vs. {}", coord_.size(), descr_.size()));
     
     for(auto& pair : keys_) { // pair = key, std::vector<double>
         if (pair.second.size() != coord_.size())
-            throw std::runtime_error(fmt::format("Mismatch of container sizes (key='{}' container > coord): {} < {}", pair.first, pair.second.size(), coord_.size()));
+            throw std::runtime_error(fmt::format("Mismatch of container sizes (key='{}' container != coord): {} != {}", pair.first, pair.second.size(), coord_.size()));
     }
 
     if (coord_.size() != proxies_.size())
@@ -299,13 +235,15 @@ void Confpool::full_check() const {
             throw std::runtime_error(fmt::format("MolProxy #{} has number {} (must be equal)", i, proxies_[i].get_index()));
 }
 
-void Confpool::sort(const py::str& py_keyname) {
+void Confpool::sort(const py::str& py_keyname, const py::kwargs& kwargs) {
     full_check();
-    std::cout << "Doing some sorting" << std::endl;
     
+    bool ascend = true;
+    if (kwargs.attr("__contains__")("ascending").cast<bool>())
+        ascend = kwargs["ascending"].cast<bool>();
+
     const auto keyname = py_keyname.cast<std::string>();
-    auto p = Utils::sort_permutation(keys_[keyname]);
-    std::cout << "Reorder = " << py::repr(py::cast(p)).cast<std::string>() << std::endl;
+    auto p = Utils::sort_permutation(keys_[keyname], ascend);
 
     Utils::apply_permutation_in_place(descr_, p);
     Utils::apply_permutation_in_place(coord_, p);
@@ -313,7 +251,7 @@ void Confpool::sort(const py::str& py_keyname) {
         Utils::apply_permutation_in_place(pair.second, p);
 }
 
-void Confpool::rmsd_filter(const py::float_& py_rmsd_cutoff) {
+py::int_ Confpool::rmsd_filter(const py::float_& py_rmsd_cutoff) {
     full_check();
 
     unsigned int del_count = 0;
@@ -331,48 +269,76 @@ void Confpool::rmsd_filter(const py::float_& py_rmsd_cutoff) {
             }
         }
     }
-    fmt::print("Deleted {} structures\n", del_count);
     resize();
+    return del_count;
 }
 
-MolProxy Confpool::__getitem__(const py::int_& idx)
-{ return proxies_[idx]; }
+py::object Confpool::__getitem__(const py::object& key) {
+    if (py::isinstance<py::int_>(key))
+        return py::cast(proxies_[key.cast<int>()]);
+    else if (py::isinstance<py::str>(key))
+        return key_to_list(key.cast<std::string>());
+    else
+        throw std::runtime_error(fmt::format("Expected either an integer (conformer index) or a string (a key). Got a {}", py::repr(key).cast<std::string>()));
+}
 
-/*
-py::dict Confpool::get_structure(const py::int_& py_index) {
-    const auto index = py_index.cast<int>();
-    if (index < 0) {
-        throw std::runtime_error(fmt::format("Given index ({}) is less than zero", index));
+void Confpool::__setitem__(const py::object& key, const py::object& func) {
+    if (!py::isinstance<py::str>(key))
+            throw std::runtime_error(fmt::format("Expected str as key. Got a {}", py::repr(key).cast<std::string>()));
+    if (!py::isinstance<py::function>(func))
+            throw std::runtime_error(fmt::format("Expected a function for keyvalue modification. Got a {}", py::repr(func).cast<std::string>()));
+    modify_key(key.cast<std::string>(), func.cast<py::function>());
+}
+
+void Confpool::modify_key(const std::string& keyname, const py::function& func) {
+    full_check();
+    prepare_key(keyname);
+    for(int i = 0; i < coord_.size(); ++i)
+        keys_[keyname][i] = func(proxies_[i]).cast<double>();
+}
+
+void Confpool::modify_descr(const py::function& func) {
+    full_check();
+    for(int i = 0; i < coord_.size(); ++i)
+        descr_[i] = func(proxies_[i]).cast<std::string>();
+}
+
+py::object Confpool::__getattr__(const py::str& py_attr) {
+    const auto attr = py_attr.cast<std::string>();
+    if (attr == "size")
+        return py::cast(coord_.size());
+    else if (attr == "atom_symbols")
+        return get_atom_symbols();
+    else
+        throw std::runtime_error(fmt::format("Unknown attr {}", attr));
+}
+
+void Confpool::__setattr__(const py::str& py_attr, const py::object& value) {
+    const auto attr = py_attr.cast<std::string>();
+    if (attr == "descr") {
+        if (!py::isinstance<py::function>(value))
+            throw std::runtime_error(fmt::format("Expected a function for description modification. Got a {}", py::repr(value).cast<std::string>()));
+        modify_descr(value.cast<py::function>());
+    } else {
+        throw std::runtime_error(fmt::format("Unknown attr {}", attr));
     }
-    else if (index >= coord_.size()) {
-        throw std::runtime_error(fmt::format("Given index ({}) is bigger than the maximum list element ({})", index, coord_.size()));
+}
+
+void Confpool::__delitem__(const py::object& py_key) {
+    if (py::isinstance<py::int_>(py_key)) {
+        remove_structure(py_key.cast<int>());
+        resize();
+    } else if (py::isinstance<py::str>(py_key)) {
+        remove_key(py_key.cast<std::string>());
+    } else {
+        throw std::runtime_error(fmt::format("Expected either keyname or structure index for deletion. Got {}", py::repr(py_key).cast<std::string>()));
     }
+    full_check();
+}
 
-    py::dict res;
-
-    if (index < ener_.size())
-        res["energy"] = py::cast(ener_[index]);
-    res["descr"] = py::cast(descr_[index]);
-
-    const size_t size = natoms * 3;
-    double *coord_array = new double[size];
-    for (size_t i = 0; i < natoms; i++) {
-        const auto& coords = coord_[index].get_atom(i);
-        coord_array[i * 3 + 0] = coords[0];
-        coord_array[i * 3 + 1] = coords[1];
-        coord_array[i * 3 + 2] = coords[2];
-    }
-
-    py::capsule free_when_done(coord_array, [](void *f) {
-        double *foo = reinterpret_cast<double *>(f);
-        delete[] foo;
-    });
-
-    res["xyz"] = py::array_t<double>(
-        {static_cast<int>(natoms), 3}, // shape
-        {3*8, 8}, // C-style contiguous strides for double
-        coord_array, // the data pointer
-        free_when_done);
+inline py::list Confpool::key_to_list(const std::string& key) const {
+    py::list res;
+    for (const auto& item : keys_.at(key))
+        res.append(item);
     return res;
 }
-*/
