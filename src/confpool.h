@@ -45,20 +45,25 @@ class Confpool {
         void __delitem__(const py::object& py_key);
 
         py::int_ include_from_file(const py::str& py_filename);
+        void include_from_xyz(const py::array_t<double>& xyz, const py::str& descr);
+        void include_subset(Confpool& other, const py::list& py_idxs);
         py::int_ filter(const py::function& py_parser);
         py::int_ upper_cutoff(const py::str& py_keyname, const py::float_& py_cutoff);
         py::int_ lower_cutoff(const py::str& py_keyname, const py::float_& py_cutoff);
-        py::int_ rmsd_filter(const py::float_& py_rmsd_cutoff);
+        py::dict rmsd_filter(const py::float_& py_rmsd_cutoff);
 
         py::int_ count(const py::function& py_criterion);
 
         void sort(const py::str& py_keyname, const py::kwargs& kwargs);
         void save(const py::str& py_filename) const;
         py::dict as_table() const;
+        py::array_t<double> get_rmsd_matrix();
 
-        inline std::vector<double>& key_access(const std::string& key) { return keys_.at(key); }
-        inline std::string& descr_access(const int& i) { return descr_[i]; }
+        inline const SymVector& symbols_access() const { return sym_; }
         inline CoordContainerType& coord_access(const int& i) { return coord_[i]; }
+        inline std::string& descr_access(const int& i) { return descr_[i]; }
+        inline std::vector<double>& key_access(const std::string& key) { return keys_.at(key); }
+        inline const std::unordered_map<std::string, std::vector<double>>& key_full_access() const { return keys_; }
         inline const int get_natoms() const noexcept { return natoms; }
         
         inline void prepare_key(const std::string& keyname) noexcept {

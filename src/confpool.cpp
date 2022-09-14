@@ -7,6 +7,7 @@
 #include <math.h>
 #include <numeric>
 #include <fstream>
+#include <chrono>
 
 #include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
@@ -251,26 +252,92 @@ void Confpool::sort(const py::str& py_keyname, const py::kwargs& kwargs) {
         Utils::apply_permutation_in_place(pair.second, p);
 }
 
-py::int_ Confpool::rmsd_filter(const py::float_& py_rmsd_cutoff) {
+// py::int_ Confpool::rmsd_filter(const py::float_& py_rmsd_cutoff) {
+//     full_check();
+//     using namespace std::chrono;
+//     auto start_time = high_resolution_clock::now();
+
+//     unsigned int del_count = 0;
+//     const auto cutoff = py_rmsd_cutoff.cast<double>();
+//     const auto atom_ints = Utils::generate_atom_ints(sym_);
+//     RmsdCalculator rmsd(natoms, atom_ints);
+//     int rmsd_calc_count = 0;
+//     for (int i = coord_.size() - 1; i > 0; i--) {
+//         auto& curgeom = coord_[i].to_boost_format();
+//         for (int j = i - 1; j >= 0; j--) {
+//             auto& testgeom = coord_[j].to_boost_format();
+//             rmsd_calc_count++;
+//             if (rmsd.calc(curgeom, testgeom) < cutoff) {
+//                 remove_structure(i);
+//                 del_count += 1;
+//                 break;
+//             }
+//         }
+//     }
+//     auto stop_time = high_resolution_clock::now();
+//     duration<double, std::milli> fp_ms = stop_time - start_time;
+//     fmt::print("Time elapsed = {} ms\nPer RMSD calc = {} ms\n", fp_ms.count(), fp_ms.count() / rmsd_calc_count);
+
+//     resize();
+//     return del_count;
+// }
+
+py::dict Confpool::rmsd_filter(const py::float_& py_rmsd_cutoff) {
     full_check();
+    using namespace std::chrono;
+    auto start_time = high_resolution_clock::now();
 
     unsigned int del_count = 0;
     const auto cutoff = py_rmsd_cutoff.cast<double>();
     const auto atom_ints = Utils::generate_atom_ints(sym_);
     RmsdCalculator rmsd(natoms, atom_ints);
-    for (int i = coord_.size() - 1; i > 0; i--) {
+    double minimal_rmsd = 100.0; // FIX ME
+    int min_pairA = -1, min_pairB = -1;
+    int rmsd_calc_count = 0;
+    for (int i = 0; i < coord_.size(); i++) {
+        double cur_min_rmsd = minimal_rmsd;
+        int cur_min_pair = -1;
         auto& curgeom = coord_[i].to_boost_format();
+        bool removed = false;
         for (int j = i - 1; j >= 0; j--) {
             auto& testgeom = coord_[j].to_boost_format();
-            if (rmsd.calc(curgeom, testgeom) < cutoff) {
+            auto rmsd_value = rmsd.calc(curgeom, testgeom);
+            rmsd_calc_count++;
+            if (rmsd_value < cutoff) {
                 remove_structure(i);
                 del_count += 1;
+                removed = true;
+                i--;
                 break;
+            } else if (rmsd_value < cur_min_rmsd) {
+                cur_min_pair = j;
+                cur_min_rmsd = rmsd_value;
             }
         }
+
+        if (!removed && (cur_min_rmsd < minimal_rmsd)) {
+            if (cur_min_pair == -1)
+                throw std::runtime_error("A bug detected. 306");
+            min_pairA = i;
+            min_pairB = cur_min_pair;
+            minimal_rmsd = cur_min_rmsd;
+        }
     }
+    auto stop_time = high_resolution_clock::now();
+    duration<double, std::milli> fp_ms = stop_time - start_time;
+    fmt::print("RMSD calc statistics:\nTime elapsed = {} ms\nPer RMSD calc = {} ms\n", fp_ms.count(), fp_ms.count() / rmsd_calc_count);
+
+    if (min_pairA == -1)
+        throw std::runtime_error("A bug detected. 314");
+    if (min_pairB == -1)
+        throw std::runtime_error("A bug detected. 316");
+    py::dict res;
+    res["DelCount"] = del_count;
+    res["MinRMSD_pairA"] = min_pairA;
+    res["MinRMSD_pairB"] = min_pairB;
+    res["MinRMSD"] = minimal_rmsd;
     resize();
-    return del_count;
+    return res;
 }
 
 py::object Confpool::__getitem__(const py::object& key) {
@@ -341,4 +408,88 @@ inline py::list Confpool::key_to_list(const std::string& key) const {
     for (const auto& item : keys_.at(key))
         res.append(item);
     return res;
+}
+
+py::array_t<double> Confpool::get_rmsd_matrix() {
+    using namespace std::chrono;
+    auto start_time = high_resolution_clock::now();
+
+    int nstructs = coord_.size();
+    const size_t size = nstructs * nstructs;
+    double *coord_array = new double[size];
+    
+    int rmsd_calc_count = 0;
+    const auto atom_ints = Utils::generate_atom_ints(sym_);
+    RmsdCalculator rmsd(natoms, atom_ints);
+    for (size_t i = 0; i < nstructs; i++) {
+        auto& curgeom = coord_[i].to_boost_format();
+        for (size_t j = 0; j < i; j++) {
+            auto& testgeom = coord_[j].to_boost_format();
+            auto rmsd_value = rmsd.calc(curgeom, testgeom);
+            coord_array[i * nstructs + j] = rmsd_value;
+            coord_array[j * nstructs + i] = rmsd_value;
+            rmsd_calc_count++;
+        }
+    }
+    auto stop_time = high_resolution_clock::now();
+    duration<double, std::milli> fp_ms = stop_time - start_time;
+    fmt::print("RMSD matrix statistics:\nTime elapsed = {} ms\nPer RMSD calc = {} ms\n", fp_ms.count(), fp_ms.count() / rmsd_calc_count);
+    
+    py::capsule free_when_done(coord_array, [](void *f) {
+        double *foo = reinterpret_cast<double *>(f);
+        delete[] foo;
+    });
+    
+    return py::array_t<double>(
+        {nstructs, nstructs}, // shape
+        {nstructs*8, 8}, // C-style contiguous strides for double
+        coord_array, // the data pointer
+        free_when_done);
+}
+
+void Confpool::include_from_xyz(const py::array_t<double>& xyz, const py::str& descr) {
+    if (natoms == 0)
+        throw std::runtime_error("The object is unintialized");
+    
+    py::buffer_info input_buf = xyz.request();
+    if (input_buf.ndim != 2)
+        throw std::runtime_error("numpy.ndarray dims must be 2!");
+
+    if ((input_buf.shape[0] != natoms) || (input_buf.shape[1] != 3))
+        throw std::runtime_error(fmt::format("Expected dimensions ({}, {}). Got ({}, {})", natoms, 3, input_buf.shape[0], input_buf.shape[1]));
+
+    full_check();
+    auto geom = CoordContainerType(natoms);
+    double* ptr1 = (double*)input_buf.ptr;
+    for (int i = 0; i < input_buf.shape[0]; i++)
+    {
+        geom.set_atom(i, {ptr1[i * input_buf.shape[1]],
+                          ptr1[i * input_buf.shape[1] + 1],
+                          ptr1[i * input_buf.shape[1] + 2]});
+    }
+    coord_.push_back(geom);
+    descr_.push_back(descr.cast<std::string>());
+    resize();
+}
+
+void Confpool::include_subset(Confpool& other, const py::list& py_idxs) {
+    full_check();
+    auto idxs = py_idxs.cast<std::vector<int>>();
+    if (natoms == 0) {
+        natoms = other.get_natoms();
+        sym_ = other.symbols_access();
+    }
+
+    for(const auto& pair : other.key_full_access())
+        prepare_key(pair.first);
+
+    for (const auto& idx : idxs) {
+        coord_.push_back(other.coord_access(idx));
+        descr_.push_back(other.descr_access(idx));
+    }
+    
+    for (const auto& idx : idxs)
+        for(const auto& pair : other.key_full_access())
+            keys_[pair.first].push_back(pair.second[idx]);
+    resize();
 }

@@ -1,11 +1,30 @@
 import os
-from pyxyz import Confpool
+import confpool as cp
+import pandas as pd
 import numpy as np
 # import pyxyz.test
 # pyxyz.test.run_tests()
 
 if __name__ == "__main__":
-    p = Confpool()
+    print("Test:")
+    p = cp.Confpool()
+    # p.include_from_file("1a_cis_crefinal2.xyz")
+    p.include_from_file("1a_trans_crefinal2.xyz")
+    p["E"] = lambda m: 0.0
+    rmsd_res = p.rmsd_filter(0.3)
+    print("Res = {}".format(repr(rmsd_res)))
+    # rmsd_m = p.get_rmsd_matrix()
+    # print(repr(rmsd_m))
+
+    newp = cp.Confpool()
+    newp.include_subset(p, [rmsd_res["MinRMSD_pairA"], rmsd_res["MinRMSD_pairB"]])
+    # myxyz = p[0].xyz
+    # myxyz[0] += np.array([1.0, 0.0, 0.0])
+    # p.include_from_xyz(myxyz, "Trash") 
+    newp.save("test.xyz")
+    raise Exception("lol")
+
+    p = cp.Confpool()
     p.include_from_file("crest_conformersA.xyz")
     p.include_from_file("crest_conformersB.xyz")
     print("Number of molecules = {}".format(p.size))
@@ -17,7 +36,7 @@ if __name__ == "__main__":
     n_del += p.upper_cutoff("Energy", 5.0 * KC2H)
     print("{} confs were filtered in total".format(n_del))
     p.sort("Energy") # Ascending by default. Use ascending=False to override
-    n_del += p.rmsd_filter(0.3)['DelCount']
+    n_del += p.rmsd_filter(0.3)
     print("{} confs were filtered in total".format(n_del))
     p.descr = lambda m: "Conf #{}; Energy = {:6f} a.u.".format(m.idx + 1, m["Energy"])
     p.save('check.xyz')
@@ -73,18 +92,12 @@ Conformation_{idx}
     p.save('check.xyz')
 
     import pandas as pd
-    p = Confpool()
+    p = cp.Confpool()
     p.include_from_file("crest_conformersA.xyz")
     p.include_from_file("crest_conformersB.xyz")
     p["Energy"] = lambda m: float(m.descr.strip())
     p.sort("Energy")
-    rmsd_res = p.rmsd_filter(0.3)
-    newp = Confpool()
-    newp.include_subset(p, [rmsd_res["MinRMSD_pairA"], rmsd_res["MinRMSD_pairB"]])
-    assert newp.size == 2
-    assert rmsd_res["MinRMSD_pairA"] == 14
-    assert rmsd_res["MinRMSD_pairB"] == 12
-    
+    p.rmsd_filter(0.3)
     for i in range(p.size):
         if hbond_condition(p[i]) and p[i].l(26, 27) < 1.8:
             p[i]["MyCondition"] = 1.0

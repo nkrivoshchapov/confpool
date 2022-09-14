@@ -17,7 +17,7 @@ if __name__ == "__main__":
     n_del += p.upper_cutoff("Energy", 5.0 * KC2H)
     print("{} confs were filtered in total".format(n_del))
     p.sort("Energy") # Ascending by default. Use ascending=False to override
-    n_del += p.rmsd_filter(0.3)
+    n_del += p.rmsd_filter(0.3)['DelCount']
     print("{} confs were filtered in total".format(n_del))
     p.descr = lambda m: "Conf #{}; Energy = {:6f} a.u.".format(m.idx + 1, m["Energy"])
     p.save('check.xyz')
@@ -78,7 +78,13 @@ Conformation_{idx}
     p.include_from_file("crest_conformersB.xyz")
     p["Energy"] = lambda m: float(m.descr.strip())
     p.sort("Energy")
-    p.rmsd_filter(0.3)
+
+    rmsd_res = p.rmsd_filter(0.3)
+    newp = Confpool()
+    newp.include_subset(p, [rmsd_res["MinRMSD_pairA"], rmsd_res["MinRMSD_pairB"]])
+    newp.save("rmsd_test.xyz")
+    print(repr(rmsd_res))
+
     for i in range(p.size):
         if hbond_condition(p[i]) and p[i].l(26, 27) < 1.8:
             p[i]["MyCondition"] = 1.0
