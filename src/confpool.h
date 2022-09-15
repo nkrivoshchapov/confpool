@@ -44,6 +44,8 @@ class Confpool {
         void __setattr__(const py::str& py_attr, const py::object& func);
         void __delitem__(const py::object& py_key);
 
+        py::int_ __len__(); 
+
         py::int_ include_from_file(const py::str& py_filename);
         void include_from_xyz(const py::array_t<double>& xyz, const py::str& descr);
         void include_subset(Confpool& other, const py::list& py_idxs);

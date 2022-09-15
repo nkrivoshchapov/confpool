@@ -380,7 +380,7 @@ py::object Confpool::__getattr__(const py::str& py_attr) {
         throw std::runtime_error(fmt::format("Unknown attr {}", attr));
 }
 
-py::object Confpool::__len__() {
+py::int_ Confpool::__len__() {
     return py::cast(coord_.size());
 }
 
