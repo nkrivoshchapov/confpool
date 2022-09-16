@@ -341,9 +341,12 @@ py::dict Confpool::rmsd_filter(const py::float_& py_rmsd_cutoff) {
 }
 
 py::object Confpool::__getitem__(const py::object& key) {
-    if (py::isinstance<py::int_>(key))
-        return py::cast(proxies_[key.cast<int>()]);
-    else if (py::isinstance<py::str>(key))
+    if (py::isinstance<py::int_>(key)) {
+        if (key.cast<int>() < coord_.size())
+            return py::cast(proxies_[key.cast<int>()]);
+        else
+            throw py::index_error("Confpool index out of range");
+    }else if (py::isinstance<py::str>(key))
         return key_to_list(key.cast<std::string>());
     else
         throw std::runtime_error(fmt::format("Expected either an integer (conformer index) or a string (a key). Got a {}", py::repr(key).cast<std::string>()));
@@ -378,6 +381,10 @@ py::object Confpool::__getattr__(const py::str& py_attr) {
         return get_atom_symbols();
     else
         throw std::runtime_error(fmt::format("Unknown attr {}", attr));
+}
+
+py::int_ Confpool::__len__() {
+    return py::cast(coord_.size());
 }
 
 void Confpool::__setattr__(const py::str& py_attr, const py::object& value) {

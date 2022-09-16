@@ -23,6 +23,7 @@ PYBIND11_MODULE(confpool, m) {
         .def("__getattr__", &Confpool::__getattr__)
         .def("__setattr__", &Confpool::__setattr__)
         .def("__delitem__", &Confpool::__delitem__)
+        .def("__len__", &Confpool::__len__)
         .def("include_from_file", &Confpool::include_from_file)
         .def("include_from_xyz", &Confpool::include_from_xyz)
         .def("include_subset", &Confpool::include_subset)
